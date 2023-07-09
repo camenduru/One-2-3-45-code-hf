@@ -35,7 +35,10 @@ def load_model_from_config(config, ckpt, device, verbose=False):
 
 
 def init_model(device, ckpt):
-    config='configs/sd-objaverse-finetune-c_concat-256.yaml'
+    import inspect
+    dir_path = os.path.dirname(os.path.abspath(
+            inspect.getfile(inspect.currentframe())))
+    config = os.path.join(dir_path, 'configs/sd-objaverse-finetune-c_concat-256.yaml')
 
     config = OmegaConf.load(config)
 
