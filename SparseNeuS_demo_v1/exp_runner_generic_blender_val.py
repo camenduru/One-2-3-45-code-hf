@@ -13,6 +13,9 @@ from icecream import ic
 from tqdm import tqdm
 from pyhocon import ConfigFactory
 
+import sys
+sys.path.append(os.path.dirname(__file__))
+
 from models.fields import SingleVarianceNetwork
 
 from models.featurenet import FeatureNet
