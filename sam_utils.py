@@ -11,7 +11,10 @@ from utils import find_image_file
 from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 
 def sam_init(device_id=0):
-    sam_checkpoint = "/home/chao/chao/OpenComplete/segment-anything/sam_vit_h_4b8939.pth"
+    import inspect
+    dir_path = os.path.dirname(os.path.abspath(
+            inspect.getfile(inspect.currentframe())))
+    sam_checkpoint = os.path.join(dir_path, "sam_vit_h_4b8939.pth")
     model_type = "vit_h"
 
     device = "cuda:{}".format(device_id) if torch.cuda.is_available() else "cpu"
