@@ -76,7 +76,7 @@ def sample_model_batch(model, sampler, input_im, xs, ys, n_samples=4, precision=
             cond = {}
             cond['c_crossattn'] = [c]
             # c_concat = model.encode_first_stage((input_im.to(c.device))).mode().detach()
-            cond['c_concat'] = [model.encode_first_stage((input_im.to(c.device))).mode().detach()
+            cond['c_concat'] = [model.encode_first_stage(input_im).mode().detach()
                                 .repeat(n_samples, 1, 1, 1)]
             if scale != 1.0:
                 uc = {}
@@ -99,7 +99,8 @@ def sample_model_batch(model, sampler, input_im, xs, ys, n_samples=4, precision=
             # samples_ddim = torch.nn.functional.interpolate(samples_ddim, 64, mode='nearest', antialias=False)
             x_samples_ddim = model.decode_first_stage(samples_ddim)
             ret_imgs = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0).cpu()
-            del cond, c, x_samples_ddim, samples_ddim, uc
+            del cond, c, x_samples_ddim, samples_ddim, uc, input_im
+            torch.cuda.empty_cache()
             return ret_imgs
         
 
@@ -126,6 +127,7 @@ def predict_stage1(model, sampler, input_img_path, save_path_8, adjust_set=[], d
     del input_im
     torch.cuda.empty_cache()
 
+@torch.no_grad()
 def predict_stage1_gradio(model, raw_im, save_path = "", adjust_set=[], device="cuda", ddim_steps=75, scale=3.0):
     # raw_im = raw_im.resize([256, 256], Image.LANCZOS)
     # input_im_init = preprocess_image(models, raw_im, preprocess=False)
@@ -157,7 +159,6 @@ def predict_stage1_gradio(model, raw_im, save_path = "", adjust_set=[], device="
             out_image.save(os.path.join(save_path, '%d.png'%(stage1_idx)))
         sample_idx += 1
     del x_samples_ddims_8
-    del input_im
     del sampler
     torch.cuda.empty_cache()
     return ret_imgs
@@ -188,7 +189,6 @@ def infer_stage_2(model, save_path_stage1, save_path_stage2, delta_x_2, delta_y_
             x_sample_stage2 = 255.0 * rearrange(x_samples_ddims_stage2[stage2_idx].numpy(), 'c h w -> h w c')
             Image.fromarray(x_sample_stage2.astype(np.uint8)).save(os.path.join(save_path_stage2, '%d_%d.png'%(stage1_idx, stage2_idx)))
         del input_im
-        del sampler
         del x_samples_ddims_stage2
         torch.cuda.empty_cache()
 
