@@ -61,9 +61,9 @@ def init_model(device, ckpt):
     return models
 
 @torch.no_grad()
-def sample_model_batch(model, sampler, input_im, xs, ys, n_samples=4, precision='fp32', ddim_eta=1.0, ddim_steps=75, scale=3.0, h=256, w=256):
+def sample_model_batch(model, sampler, input_im, xs, ys, n_samples=4, precision='autocast', ddim_eta=1.0, ddim_steps=75, scale=3.0, h=256, w=256):
     precision_scope = autocast if precision == 'autocast' else nullcontext
-    with precision_scope(model.device):
+    with precision_scope("cuda"):
         with model.ema_scope():
             c = model.get_learned_conditioning(input_im).tile(n_samples, 1, 1)
             T = []
@@ -98,7 +98,9 @@ def sample_model_batch(model, sampler, input_im, xs, ys, n_samples=4, precision=
             print(samples_ddim.shape)
             # samples_ddim = torch.nn.functional.interpolate(samples_ddim, 64, mode='nearest', antialias=False)
             x_samples_ddim = model.decode_first_stage(samples_ddim)
-            return torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0).cpu()
+            ret_imgs = torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0).cpu()
+            del cond, c, x_samples_ddim, samples_ddim, uc
+            return ret_imgs
         
 
 def predict_stage1(model, sampler, input_img_path, save_path_8, adjust_set=[], device="cuda"):
@@ -118,7 +120,7 @@ def predict_stage1(model, sampler, input_img_path, save_path_8, adjust_set=[], d
     for stage1_idx in range(len(x_samples_ddims_8)):
         if adjust_set != [] and stage1_idx not in adjust_set:
             continue
-        x_sample = 255.0 * rearrange(x_samples_ddims_8[stage1_idx].cpu().numpy(), 'c h w -> h w c')
+        x_sample = 255.0 * rearrange(x_samples_ddims_8[stage1_idx].numpy(), 'c h w -> h w c')
         Image.fromarray(x_sample.astype(np.uint8)).save(os.path.join(save_path_8, '%d.png'%(stage1_idx)))
     del x_samples_ddims_8
     del input_im
@@ -148,7 +150,7 @@ def predict_stage1_gradio(model, raw_im, save_path = "", adjust_set=[], device="
     for stage1_idx in range(len(delta_x_1_8)):
         if adjust_set != [] and stage1_idx not in adjust_set:
             continue
-        x_sample = 255.0 * rearrange(x_samples_ddims_8[sample_idx].cpu().numpy(), 'c h w -> h w c')
+        x_sample = 255.0 * rearrange(x_samples_ddims_8[sample_idx].numpy(), 'c h w -> h w c')
         out_image = Image.fromarray(x_sample.astype(np.uint8))
         ret_imgs.append(out_image)
         if save_path:
@@ -177,16 +179,13 @@ def infer_stage_2(model, save_path_stage1, save_path_stage2, delta_x_2, delta_y_
         input_im_init = input_im_init / 255.0
         input_im = transforms.ToTensor()(input_im_init).unsqueeze(0).to(device)
         input_im = input_im * 2 - 1
-        print("debug input device", input_im.device)
-        print("debug model device", model.device)
         # infer stage 2
         sampler = DDIMSampler(model)
-        print("debug sampler device", sampler.device)
         # sampler.to(device)
         # stage2_in = x_samples_ddims[stage1_idx][None, ...].to(device) * 2 - 1
         x_samples_ddims_stage2 = sample_model_batch(model, sampler, input_im, delta_x_2, delta_y_2, n_samples=len(delta_x_2), ddim_steps=ddim_steps, scale=scale)
         for stage2_idx in range(len(delta_x_2)):
-            x_sample_stage2 = 255.0 * rearrange(x_samples_ddims_stage2[stage2_idx].cpu().numpy(), 'c h w -> h w c')
+            x_sample_stage2 = 255.0 * rearrange(x_samples_ddims_stage2[stage2_idx].numpy(), 'c h w -> h w c')
             Image.fromarray(x_sample_stage2.astype(np.uint8)).save(os.path.join(save_path_stage2, '%d_%d.png'%(stage1_idx, stage2_idx)))
         del input_im
         del sampler

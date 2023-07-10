@@ -103,5 +103,6 @@ def sam_out_nosave(predictor, input_image, *bbox_sliders):
     out_image_bbox = out_image.copy()
     out_image[:, :, 3] = mask.astype(np.uint8) * 255
     out_image_bbox[:, :, 3] = masks_bbox[-1].astype(np.uint8) * 255 # np.argmax(scores_bbox)
+    torch.cuda.empty_cache()
     return Image.fromarray(out_image_bbox, mode='RGBA') 
     cv2.imwrite(save_path, cv2.cvtColor(out_image_bbox, cv2.COLOR_RGBA2BGRA))
