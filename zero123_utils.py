@@ -72,7 +72,6 @@ def sample_model_batch(model, sampler, input_im, xs, ys, n_samples=4, precision=
             T = torch.tensor(np.array(T))[:, None, :].float().to(c.device)
             c = torch.cat([c, T], dim=-1)
             c = model.cc_projection(c)
-            print("debug c device", c.device)
             cond = {}
             cond['c_crossattn'] = [c]
             # c_concat = model.encode_first_stage((input_im.to(c.device))).mode().detach()
