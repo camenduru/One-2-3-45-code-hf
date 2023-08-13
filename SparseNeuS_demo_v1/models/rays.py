@@ -1,12 +1,7 @@
-import os, torch, cv2, re
+import os, torch
 import numpy as np
 
-from PIL import Image
 import torch.nn.functional as F
-import torchvision.transforms as T
-
-from random import random
-
 
 def build_patch_offset(h_patch_size):
     offsets = torch.arange(-h_patch_size, h_patch_size + 1)
@@ -24,7 +19,7 @@ def gen_rays_from_single_image(H, W, image, intrinsic, c2w, depth=None, mask=Non
     """
     device = image.device
     ys, xs = torch.meshgrid(torch.linspace(0, H - 1, H),
-                            torch.linspace(0, W - 1, W))  # pytorch's meshgrid has indexing='ij'
+                            torch.linspace(0, W - 1, W), indexing="ij")  # pytorch's meshgrid has indexing='ij'
     p = torch.stack([xs, ys, torch.ones_like(ys)], dim=-1)  # H, W, 3
 
     # normalized ndc uv coordinates, (-1, 1)
@@ -86,7 +81,7 @@ def gen_random_rays_from_single_image(H, W, N_rays, image, intrinsic, c2w, depth
         pixels_y_1 = torch.randint(low=0, high=H, size=[N_rays // 4])
 
         ys, xs = torch.meshgrid(torch.linspace(0, H - 1, H),
-                                torch.linspace(0, W - 1, W))  # pytorch's meshgrid has indexing='ij'
+                                torch.linspace(0, W - 1, W), indexing="ij")  # pytorch's meshgrid has indexing='ij'
         p = torch.stack([xs, ys], dim=-1)  # H, W, 2
 
         try:
@@ -292,7 +287,7 @@ def gen_rays_between(c2w_0, c2w_1, intrinsic, ratio, H, W, resolution_level=1):
     l = resolution_level
     tx = torch.linspace(0, W - 1, W // l)
     ty = torch.linspace(0, H - 1, H // l)
-    pixels_x, pixels_y = torch.meshgrid(tx, ty)
+    pixels_x, pixels_y = torch.meshgrid(tx, ty, indexing="ij")
     p = torch.stack([pixels_x, pixels_y, torch.ones_like(pixels_y)], dim=-1).to(device)  # W, H, 3
 
     intrinsic_inv = torch.inverse(intrinsic[:3, :3])

@@ -1,15 +1,12 @@
-import torch
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
-import argparse
 import os
 import logging
+import argparse
 import numpy as np
-import cv2 as cv
-import trimesh
 from shutil import copyfile
+import torch
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from icecream import ic
+from rich import print
 from tqdm import tqdm
 from pyhocon import ConfigFactory
 
@@ -17,23 +14,12 @@ import sys
 sys.path.append(os.path.dirname(__file__))
 
 from models.fields import SingleVarianceNetwork
-
 from models.featurenet import FeatureNet
-
 from models.trainer_generic import GenericTrainer
-
 from models.sparse_sdf_network import SparseSdfNetwork
-
 from models.rendering_network import GeneralRenderingNetwork
-
-from datetime import datetime
-
-from data.dtu_general import MVSDatasetDtuPerView
-
-from utils.training_utils import tocuda
 from data.blender_general_narrow_all_eval_new_data import BlenderPerView
 
-from termcolor import colored
 
 from datetime import datetime
 
@@ -45,14 +31,14 @@ class Runner:
         self.device = torch.device('cuda:%d' % local_rank)
         # self.device = torch.device('cuda')
         self.num_devices = torch.cuda.device_count()
-        self.is_continue = is_continue
+        self.is_continue = is_continue or (mode == "export_mesh")
         self.is_restore = is_restore
         self.restore_lod0 = restore_lod0
         self.mode = mode
         self.model_list = []
         self.logger = logging.getLogger('exp_logger')
 
-        print(colored("detected %d GPUs" % self.num_devices, "red"))
+        print("detected %d GPUs" % self.num_devices)
 
         self.conf_path = conf_path
         self.conf = ConfigFactory.parse_file(conf_path)
@@ -63,7 +49,7 @@ class Runner:
         else:
             self.base_exp_dir = self.conf['general.base_exp_dir']
         self.conf['general.base_exp_dir'] = self.base_exp_dir # jha use this when testing
-        print(colored("base_exp_dir:  " + self.base_exp_dir, 'yellow'))
+        print("base_exp_dir: " + self.base_exp_dir)
         os.makedirs(self.base_exp_dir, exist_ok=True)
         self.iter_step = 0
         self.val_step = 0
@@ -121,12 +107,11 @@ class Runner:
                 **self.conf['model.rendering_network_lod1']).to(self.device)
         if self.mode == 'export_mesh' or self.mode == 'val':
             # base_exp_dir_to_store = os.path.join(self.base_exp_dir, '{:%Y_%m_%d_%H_%M_%S}'.format(datetime.now()))
-            print("save mesh to:", os.path.join("../", args.specific_dataset_name))
             base_exp_dir_to_store = os.path.join("../", args.specific_dataset_name) #"../gradio_tmp" # MODIFIED
         else:
             base_exp_dir_to_store = self.base_exp_dir
 
-        print(colored(f"Store in: {base_exp_dir_to_store}", "blue"))
+        print(f"Store in: {base_exp_dir_to_store}")
         # Renderer model
         self.trainer = GenericTrainer(
             self.rendering_network_outside,
@@ -149,7 +134,7 @@ class Runner:
 
         # Load checkpoint
         latest_model_name = None
-        if is_continue:
+        if self.is_continue:
             model_list_raw = os.listdir(os.path.join(self.base_exp_dir, 'checkpoints'))
             model_list = []
             for model_name in model_list_raw:
@@ -238,7 +223,7 @@ class Runner:
         epochs = int(1 + res_step // len(dataloader))
 
         self.adjust_learning_rate()
-        print(colored("starting training learning rate: {:.5f}".format(self.optimizer.param_groups[0]['lr']), "yellow"))
+        print("starting training learning rate: {:.5f}".format(self.optimizer.param_groups[0]['lr']))
 
         background_rgb = None
         if self.use_white_bkgd:
@@ -247,7 +232,7 @@ class Runner:
 
         for epoch_i in range(epochs):
 
-            print(colored("current epoch %d" % epoch_i, 'red'))
+            print("current epoch %d" % epoch_i)
             dataloader = tqdm(dataloader)
 
             for batch in dataloader:
@@ -365,8 +350,8 @@ class Runner:
                             losses_lod1['color_fine_loss'].mean() if losses_lod1 is not None else 0,
                             self.optimizer.param_groups[0]['lr']))
 
-                    print(colored('alpha_inter_ratio_lod0 = {:.4f} alpha_inter_ratio_lod1 = {:.4f}\n'.format(
-                        alpha_inter_ratio_lod0, alpha_inter_ratio_lod1), 'green'))
+                    print('alpha_inter_ratio_lod0 = {:.4f} alpha_inter_ratio_lod1 = {:.4f}\n'.format(
+                        alpha_inter_ratio_lod0, alpha_inter_ratio_lod1))
 
                     if losses_lod0 is not None:
                         # print("[TEST]: weights_sum in print", losses_lod0['weights_sum'].mean())
@@ -469,7 +454,7 @@ class Runner:
                     # 3. load the new state dict
                     network.load_state_dict(pretrained_dict)
                 except:
-                    print(colored(comment + " load fails", 'yellow'))
+                    print(comment + " load fails")
 
         checkpoint = torch.load(os.path.join(self.base_exp_dir, 'checkpoints', checkpoint_name),
                                 map_location=self.device)
@@ -497,7 +482,7 @@ class Runner:
             try:
                 self.optimizer.load_state_dict(checkpoint['optimizer'])
             except:
-                print(colored("load optimizer fails", "yellow"))
+                print("load optimizer fails")
             self.iter_step = checkpoint['iter_step']
             self.val_step = checkpoint['val_step'] if 'val_step' in checkpoint.keys() else 0
 
@@ -532,15 +517,10 @@ class Runner:
         torch.save(checkpoint,
                    os.path.join(self.base_exp_dir, 'checkpoints', 'ckpt_{:0>6d}.pth'.format(self.iter_step)))
 
-    def validate(self, idx=-1, resolution_level=-1):
+    def validate(self, resolution_level=-1):
         # validate image
-
-        ic(self.iter_step, idx)
+        print("iter_step: ", self.iter_step)
         self.logger.info('Validate begin')
-
-        if idx < 0:
-            idx = self.val_step
-            # idx = np.random.randint(len(self.val_dataset))
         self.val_step += 1
 
         try:
@@ -576,16 +556,9 @@ class Runner:
         )
 
 
-    def export_mesh(self, idx=-1, resolution_level=-1):
-        # validate image
-
-        ic(self.iter_step, idx)
+    def export_mesh(self, resolution_level=-1):
+        print("iter_step: ", self.iter_step)
         self.logger.info('Validate begin')
-        import time 
-        start1 = time.time()
-        if idx < 0:
-            idx = self.val_step
-            # idx = np.random.randint(len(self.val_dataset))
         self.val_step += 1
 
         try:
@@ -598,7 +571,6 @@ class Runner:
 
         background_rgb = None
         if self.use_white_bkgd:
-            # background_rgb = torch.ones([1, 3]).to(self.device)
             background_rgb = 1.0
 
         batch['batch_idx'] = torch.tensor([x for x in range(self.batch_size)])
@@ -609,8 +581,6 @@ class Runner:
         else:
             alpha_inter_ratio_lod0 = 1.
         alpha_inter_ratio_lod1 = self.get_alpha_inter_ratio(self.anneal_start_lod1, self.anneal_end_lod1)
-        end1 = time.time()
-        print("time for getting data", end1 - start1)
         self.trainer(
             batch,
             background_rgb=background_rgb,

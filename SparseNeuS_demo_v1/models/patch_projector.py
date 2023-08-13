@@ -208,4 +208,4 @@ def normalize(flow, h, w, clamp=None):
 
 def build_patch_offset(h_patch_size):
     offsets = torch.arange(-h_patch_size, h_patch_size + 1)
-    return torch.stack(torch.meshgrid(offsets, offsets)[::-1], dim=-1).view(1, -1, 2)  # nb_pixels_patch * 2
+    return torch.stack(torch.meshgrid(offsets, offsets, indexing="ij")[::-1], dim=-1).view(1, -1, 2)  # nb_pixels_patch * 2

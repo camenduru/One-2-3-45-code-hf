@@ -8,25 +8,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
-import logging
-import mcubes
 import trimesh
 from icecream import ic
 
 from utils.misc_utils import visualize_depth_numpy
 
-from utils.training_utils import numpy2tensor
 from loss.depth_metric import compute_depth_errors
 
 from loss.depth_loss import DepthLoss, DepthSmoothLoss
 
-from models.rays import gen_rays_between
-
 from models.sparse_neus_renderer import SparseNeuSRenderer
-
-def safe_l2_normalize(x, dim=None, eps=1e-6):
-    return F.normalize(x, p=2, dim=dim, eps=eps)
-
 
 class GenericTrainer(nn.Module):
     def __init__(self,
@@ -223,7 +214,6 @@ class GenericTrainer(nn.Module):
         con_volume_lod0 = conditional_features_lod0['dense_volume_scale0']
 
         con_valid_mask_volume_lod0 = conditional_features_lod0['valid_mask_volume_scale0']
-        # import ipdb; ipdb.set_trace()
         coords_lod0 = conditional_features_lod0['coords_scale0']  # [1,3,wX,wY,wZ]
 
         # * extract depth maps for all the images
@@ -347,8 +337,6 @@ class GenericTrainer(nn.Module):
                                    mode='train_bg', meta=meta,
                                    iter_step=iter_step, scale_mat=scale_mat,
                                    trans_mat=trans_mat)
-        # import ipdb; ipdb.set_trace()
-        # print("Checker3.1:, after val mesh")
         losses = {
             # - lod 0
             'loss_lod0': loss_lod0,
@@ -427,7 +415,6 @@ class GenericTrainer(nn.Module):
         with torch.no_grad():
             # - obtain conditional features
             geometry_feature_maps = self.obtain_pyramid_feature_maps(imgs, lod=0)
-            # import ipdb; ipdb.set_trace()
             # - lod 0
             conditional_features_lod0 = self.sdf_network_lod0.get_conditional_volume(
                 feature_maps=geometry_feature_maps[None, :, :, :, :],
@@ -836,7 +823,6 @@ class GenericTrainer(nn.Module):
                     print("meta: ", meta)
                     print("scale_factor: ", scale_factor)
                     print("depth_error_mean: ", depth_error_map.mean())
-                    # import ipdb; ipdb.set_trace()
                     depth_visualized = np.concatenate(
                             [(depth_error_map * 255).astype(np.uint8), true_colored_depth, pred_depth_colored, true_img], axis=1)[:, :, ::-1]
                     # print("depth_visualized.shape: ", depth_visualized.shape)
@@ -1003,12 +989,10 @@ class GenericTrainer(nn.Module):
         if color_fine is not None:
             # Color loss
             color_mask = color_fine_mask if color_fine_mask is not None else mask
-            # import ipdb; ipdb.set_trace()
             color_mask = color_mask[..., 0]
             color_error = (color_fine[color_mask] - true_rgb[color_mask])
             # print("Nan number", torch.isnan(color_error).sum())
             # print("Color error shape", color_error.shape)
-            # import ipdb; ipdb.set_trace()
             color_fine_loss = F.l1_loss(color_error, torch.zeros_like(color_error).to(color_error.device),
                                         reduction='mean')
             # print(color_fine_loss)
@@ -1100,8 +1084,7 @@ class GenericTrainer(nn.Module):
             "fg_bg_weight": fg_bg_weight,
             "fg_bg_loss": fg_bg_loss, # added by jha, bug of sparseNeuS
         }
-        # print("[TEST]: weights_sum in trainner forward", losses['weights_sum'].mean())
-        losses = numpy2tensor(losses, device=rays_o.device)
+        losses = torch.tensor(losses, device=rays_o.device)
         return loss, losses, depth_statis
 
     @torch.no_grad()
@@ -1213,7 +1196,7 @@ class GenericTrainer(nn.Module):
             trans_mat_np = trans_mat.cpu().numpy()
             vertices_homo = np.concatenate([vertices, np.ones_like(vertices[:, :1])], axis=1)
             vertices = np.matmul(trans_mat_np, vertices_homo[:, :, None])[:, :3, 0]
-        # import ipdb; ipdb.set_trace()
+
         vertices_color = np.array(vertices_color.squeeze(0).cpu() * 255, dtype=np.uint8)
         mesh = trimesh.Trimesh(vertices, triangles, vertex_colors=vertices_color)
         os.makedirs(os.path.join(self.base_exp_dir, 'meshes_' + mode, 'lod{:0>1d}'.format(lod)), exist_ok=True)

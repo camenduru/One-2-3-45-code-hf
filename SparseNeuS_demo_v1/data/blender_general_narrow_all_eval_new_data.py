@@ -1,6 +1,6 @@
 from torch.utils.data import Dataset
-from utils.misc_utils import read_pfm
 import os
+import json
 import numpy as np
 import cv2
 from PIL import Image
@@ -9,12 +9,7 @@ from torchvision import transforms as T
 from data.scene import get_boundingbox
 
 from models.rays import gen_rays_from_single_image, gen_random_rays_from_single_image
-import json
-from termcolor import colored
-import imageio
 from kornia import create_meshgrid
-import open3d as o3d
-
 
 def get_ray_directions(H, W, focal, center=None):
     """
@@ -73,10 +68,6 @@ class BlenderPerView(Dataset):
         # print("root_dir: ", root_dir)
         self.root_dir = root_dir
         self.split = split
-        # self.specific_dataset_name = 'Realfusion'
-        # self.specific_dataset_name = 'GSO'
-        # self.specific_dataset_name = 'Objaverse' 
-        # self.specific_dataset_name = 'Zero123'
 
         self.specific_dataset_name = specific_dataset_name
         self.n_views = n_views
@@ -101,8 +92,6 @@ class BlenderPerView(Dataset):
         self.lvis_paths = []
         for shape_name in self.shape_list:
             self.lvis_paths.append(os.path.join(main_folder, shape_name))
-
-        # print("lvis_paths: ", self.lvis_paths)
 
         if img_wh is not None:
             assert img_wh[0] % 32 == 0 and img_wh[1] % 32 == 0, \
@@ -130,9 +119,6 @@ class BlenderPerView(Dataset):
             self.all_extrinsics.append(extrinsic)
             self.all_near_fars.append(near_far)
 
-    def read_depth(self, filename):
-        pass
-
     def read_mask(self, filename):
         mask_h = cv2.imread(filename, 0)
         mask_h = cv2.resize(mask_h, None, fx=self.downSample, fy=self.downSample,
@@ -159,11 +145,6 @@ class BlenderPerView(Dataset):
     def __len__(self):
         # return 8*len(self.lvis_paths)
         return len(self.lvis_paths)
-
-
-    def read_depth(self, filename, near_bound, noisy_factor=1.0):
-        pass
-
 
     def __getitem__(self, idx):
         sample = {}
@@ -198,9 +179,8 @@ class BlenderPerView(Dataset):
         self.c2ws = []
         self.w2cs = []
         self.near_fars = []
-        # self.root_dir = root_dir
-        for image_dix, img_id in enumerate(self.img_ids):
-            pose = self.input_poses[image_dix]
+        for image_idx, img_id in enumerate(self.img_ids):
+            pose = self.input_poses[image_idx]
             c2w = pose @ self.blender2opencv
             self.c2ws.append(c2w)
             self.w2cs.append(np.linalg.inv(c2w))
@@ -224,7 +204,6 @@ class BlenderPerView(Dataset):
         w2cs.append(w2c @ w2c_ref_inv)
         c2ws.append(np.linalg.inv(w2c @ w2c_ref_inv))
 
-        # img_filename = os.path.join(folder_path, 'stage1_8_debug', f'{self.img_ids[idx]}')
         img_filename = os.path.join(folder_path, 'stage1_8', f'{self.img_ids[idx]}')
 
         img = Image.open(img_filename)
@@ -258,7 +237,6 @@ class BlenderPerView(Dataset):
 
         for vid in src_views:
 
-            # img_filename = os.path.join(folder_path, 'stage2_8_debug', f'{self.img_ids[vid]}')
             img_filename = os.path.join(folder_path, 'stage2_8', f'{self.img_ids[vid]}')
             img = Image.open(img_filename)
             img_wh = self.img_wh
@@ -312,7 +290,6 @@ class BlenderPerView(Dataset):
             new_near_fars.append([0.95 * near, 1.05 * far])
             new_depths_h.append(depth * scale_factor)
 
-        # print(new_near_fars)
         imgs = torch.stack(imgs).float()
         depths_h = np.stack(new_depths_h)
         masks_h = np.stack(masks_h)
@@ -360,7 +337,6 @@ class BlenderPerView(Dataset):
         sample['view_ids'] = torch.from_numpy(np.array(view_ids))
         sample['affine_mats'] = torch.from_numpy(affine_mats.astype(np.float32))  # ! in world space
 
-        # sample['light_idx'] = torch.tensor(light_idx)
         sample['scan'] = shape_name
 
         sample['scale_factor'] = torch.tensor(scale_factor)

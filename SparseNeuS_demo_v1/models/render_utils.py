@@ -1,14 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import logging
-import mcubes
-import trimesh
-from icecream import ic
 
 from ops.back_project import cam2pixel
-import pdb
 
 
 def sample_pdf(bins, weights, n_samples, det=False):

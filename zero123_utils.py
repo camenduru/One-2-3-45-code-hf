@@ -9,7 +9,7 @@ from ldm.models.diffusion.ddim import DDIMSampler
 from omegaconf import OmegaConf
 from PIL import Image
 from rich import print
-from transformers import AutoFeatureExtractor
+from transformers import CLIPImageProcessor
 from torch import autocast
 from torchvision import transforms
 
@@ -35,28 +35,21 @@ def load_model_from_config(config, ckpt, device, verbose=False):
 
 
 def init_model(device, ckpt):
-    import inspect
-    dir_path = os.path.dirname(os.path.abspath(
-            inspect.getfile(inspect.currentframe())))
-    config = os.path.join(dir_path, 'configs/sd-objaverse-finetune-c_concat-256.yaml')
-
+    config = os.path.join(os.path.dirname(__file__), 'configs/sd-objaverse-finetune-c_concat-256.yaml')
     config = OmegaConf.load(config)
 
     # Instantiate all models beforehand for efficiency.
     models = dict()
     print('Instantiating LatentDiffusion...')
-    models['turncam'] = load_model_from_config(config, ckpt, device=device)
-    # print('Instantiating Carvekit HiInterface...')
-    # models['carvekit'] = create_carvekit_interface()
+    models['turncam'] = torch.compile(load_model_from_config(config, ckpt, device=device))
     print('Instantiating StableDiffusionSafetyChecker...')
     models['nsfw'] = StableDiffusionSafetyChecker.from_pretrained(
         'CompVis/stable-diffusion-safety-checker').to(device)
-    print('Instantiating AutoFeatureExtractor...')
-    models['clip_fe'] = AutoFeatureExtractor.from_pretrained(
-        'CompVis/stable-diffusion-safety-checker')
+    models['clip_fe'] = CLIPImageProcessor.from_pretrained(
+        "openai/clip-vit-large-patch14")
     # We multiply all by some factor > 1 to make them less likely to be triggered.
-    models['nsfw'].concept_embeds_weights *= 1.07
-    models['nsfw'].special_care_embeds_weights *= 1.07
+    models['nsfw'].concept_embeds_weights *= 1.2
+    models['nsfw'].special_care_embeds_weights *= 1.2
 
     return models
 
@@ -74,7 +67,6 @@ def sample_model_batch(model, sampler, input_im, xs, ys, n_samples=4, precision=
             c = model.cc_projection(c)
             cond = {}
             cond['c_crossattn'] = [c]
-            # c_concat = model.encode_first_stage((input_im.to(c.device))).mode().detach()
             cond['c_concat'] = [model.encode_first_stage(input_im).mode().detach()
                                 .repeat(n_samples, 1, 1, 1)]
             if scale != 1.0:
@@ -101,30 +93,6 @@ def sample_model_batch(model, sampler, input_im, xs, ys, n_samples=4, precision=
             del cond, c, x_samples_ddim, samples_ddim, uc, input_im
             torch.cuda.empty_cache()
             return ret_imgs
-        
-
-def predict_stage1(model, sampler, input_img_path, save_path_8, adjust_set=[], device="cuda"):
-    raw_im = Image.open(input_img_path)
-    # raw_im = raw_im.resize([256, 256], Image.LANCZOS)
-    # input_im_init = preprocess_image(models, raw_im, preprocess=False)
-    input_im_init = np.asarray(raw_im, dtype=np.float32) / 255.0
-    input_im = transforms.ToTensor()(input_im_init).unsqueeze(0).to(device)
-    input_im = input_im * 2 - 1
-
-    # stage 1: 8
-    delta_x_1_8 = [0] * 4 + [30] * 4 + [-30] * 4
-    delta_y_1_8 = [0+90*(i%4) if i < 4 else 30+90*(i%4) for i in range(8)] + [30+90*(i%4) for i in range(4)]
-
-
-    x_samples_ddims_8 = sample_model_batch(model, sampler, input_im, delta_x_1_8, delta_y_1_8, n_samples=len(delta_x_1_8))
-    for stage1_idx in range(len(x_samples_ddims_8)):
-        if adjust_set != [] and stage1_idx not in adjust_set:
-            continue
-        x_sample = 255.0 * rearrange(x_samples_ddims_8[stage1_idx].numpy(), 'c h w -> h w c')
-        Image.fromarray(x_sample.astype(np.uint8)).save(os.path.join(save_path_8, '%d.png'%(stage1_idx)))
-    del x_samples_ddims_8
-    del input_im
-    torch.cuda.empty_cache()
 
 @torch.no_grad()
 def predict_stage1_gradio(model, raw_im, save_path = "", adjust_set=[], device="cuda", ddim_steps=75, scale=3.0):
@@ -162,9 +130,6 @@ def predict_stage1_gradio(model, raw_im, save_path = "", adjust_set=[], device="
     torch.cuda.empty_cache()
     return ret_imgs
 
-
-
-
 def infer_stage_2(model, save_path_stage1, save_path_stage2, delta_x_2, delta_y_2, indices, device, ddim_steps=75, scale=3.0):
     for stage1_idx in indices:
         # save stage 1 image
@@ -192,7 +157,6 @@ def infer_stage_2(model, save_path_stage1, save_path_stage2, delta_x_2, delta_y_
         torch.cuda.empty_cache()
 
 def zero123_infer(model, input_dir_path, start_idx=0, end_idx=12, indices=None, device="cuda", ddim_steps=75, scale=3.0):
-    # input_dir_path = "/objaverse-processed/zero12345_img/eval/teddy_wild"
     # input_img_path = os.path.join(input_dir_path, "input_256.png")
     save_path_8 = os.path.join(input_dir_path, "stage1_8")
     save_path_8_2 = os.path.join(input_dir_path, "stage2_8")

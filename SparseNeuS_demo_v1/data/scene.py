@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import pdb
 
 
 def rigid_transform(xyz, transform):

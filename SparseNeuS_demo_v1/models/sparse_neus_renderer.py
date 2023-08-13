@@ -10,7 +10,6 @@ import torch.nn.functional as F
 import numpy as np
 import logging
 import mcubes
-import trimesh
 from icecream import ic
 from models.render_utils import sample_pdf
 
@@ -20,10 +19,6 @@ from tsparse.torchsparse_utils import sparse_to_dense_channel
 from models.fast_renderer import FastRenderer
 
 from models.patch_projector import PatchProjector
-
-from models.rays import gen_rays_between
-
-import pdb
 
 
 class SparseNeuSRenderer(nn.Module):
@@ -898,7 +893,7 @@ class SparseNeuSRenderer(nn.Module):
             for xi, xs in enumerate(X):
                 for yi, ys in enumerate(Y):
                     for zi, zs in enumerate(Z):
-                        xx, yy, zz = torch.meshgrid(xs, ys, zs)
+                        xx, yy, zz = torch.meshgrid(xs, ys, zs, indexing="ij")
                         pts = torch.cat([xx.reshape(-1, 1), yy.reshape(-1, 1), zz.reshape(-1, 1)], dim=-1)
 
                         # ! attention, the query function is different for extract geometry and fields
@@ -958,7 +953,7 @@ class SparseNeuSRenderer(nn.Module):
 
         with torch.no_grad():
             ys, xs = torch.meshgrid(torch.linspace(0, H - 1, H),
-                                    torch.linspace(0, W - 1, W))  # pytorch's meshgrid has indexing='ij'
+                                    torch.linspace(0, W - 1, W), indexing="ij")  # pytorch's meshgrid has indexing='ij'
             p = torch.stack([xs, ys, torch.ones_like(ys)], dim=-1)  # H, W, 3
 
             intrinsics_inv = torch.inverse(intrinsics)
