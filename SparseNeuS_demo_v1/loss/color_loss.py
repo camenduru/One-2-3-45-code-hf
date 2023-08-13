@@ -1,10 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-import icecream as ic
 from loss.ncc import NCC
-from termcolor import colored
 
 
 class Normalize(nn.Module):
@@ -140,7 +136,7 @@ class ParamAdjuster(nn.Module):
             self.adjusted = True
             self.adjusted_step = self.global_step
             self.thred_idx += 1
-            print(colored("ajusted param, now {}".format(self.param), 'red'))
+            print("adjusted param, now {}".format(self.param))
 
     def forward(self, weight_mean):
         self.global_step += 1
