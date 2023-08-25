@@ -11,14 +11,14 @@ license: mit
 <a style="display:inline-block; margin-left: .5em" href='https://github.com/One-2-3-45/One-2-3-45'><img src='https://img.shields.io/github/stars/One-2-3-45/One-2-3-45?style=social' /></a>
 </div>
 
-This inference model supports the demo for [One-2-3-45](http://One-2-3-45.com). Please check the [Space README](https://huggingface.co/spaces/One-2-3-45/One-2-3-45/blob/main/README.md) for local deployment of the demo.
+This inference model supports the demo for [One-2-3-45](http://One-2-3-45.com). 
 
 Try out our 🤗 Hugging Face Demo:
 <a target="_blank" href="https://huggingface.co/spaces/One-2-3-45/One-2-3-45">
   <img src="https://huggingface.co/datasets/huggingface/badges/raw/main/open-in-hf-spaces-sm.svg" alt="Open in HuggingFace"/>
 </a>
 
-Please refer to our [GitHub repo](https://github.com/One-2-3-45/One-2-3-45) for full code release.
+Please refer to our [GitHub repo](https://github.com/One-2-3-45/One-2-3-45) for full code release and local deployment.
 
 ## Citation
 
